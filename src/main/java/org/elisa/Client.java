@@ -12,14 +12,27 @@ import java.util.logging.Logger;
 public class Client {
     private static final Logger LOGGER = Logger.getLogger(Client.class.getName());
     private static final Map<String, Integer> wordCount = new ConcurrentHashMap<>();
-    private static final int[] SERVER_PORTS = {5001, 5002};
-    private static final String SERVER_HOST = "localhost";
+    private static final List<String> DEFAULT_SERVER_HOSTS = List.of("localhost:5001", "localhost:5002");
 
     public static void main(String[] args) {
-        ExecutorService executor = Executors.newFixedThreadPool(SERVER_PORTS.length);
+        List<String> serverHosts = args.length > 0 ? Arrays.asList(args) : DEFAULT_SERVER_HOSTS;
 
-        for (int port : SERVER_PORTS) {
-            executor.execute(() -> readFromServer(SERVER_HOST, port));
+        ExecutorService executor = Executors.newFixedThreadPool(serverHosts.size());
+        for (String serverHost : serverHosts) {
+            String[] parts = serverHost.split(":");
+            if (parts.length != 2) {
+                LOGGER.severe("Invalid server host format: " + serverHost);
+                continue;
+            }
+            String host = parts[0];
+            int port;
+            try {
+                port = Integer.parseInt(parts[1]);
+            } catch (NumberFormatException e) {
+                LOGGER.severe("Invalid port number: " + parts[1]);
+                continue;
+            }
+            executor.execute(() -> readFromServer(host, port));
         }
 
         executor.shutdown();
@@ -34,13 +47,13 @@ public class Client {
         try (Socket socket = new Socket(host, port);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-            LOGGER.info("Connected to server on port " + port);
+            LOGGER.info("Connected to server on " + host + ":" + port);
             String line;
             while ((line = in.readLine()) != null) {
                 processLine(line);
             }
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "Error connecting to server on port " + port, e);
+            LOGGER.log(Level.SEVERE, "Error connecting to server on " + host + ":" + port, e);
         }
     }
 
